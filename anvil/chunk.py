@@ -14,6 +14,12 @@ _VERSION_20w17a = 2529
 # where blocks went from numeric ids to namespaced ids (namespace:block_id)
 _VERSION_17w47a = 1451
 
+# This is the version where the height limit was increased from 0 - 255 to -64 -319
+_VERSION_21w06a = 2694
+
+# This is the version where chunk's "Level" was removed and everything it contains were moved
+_VERSION_21w43a = 2844
+
 def bin_append(a, b, length=None):
     """
     Appends number a to the left of b
@@ -58,10 +64,15 @@ class Chunk:
             # See https://minecraft.fandom.com/wiki/Data_version
             self.version = None
 
-        self.data = nbt_data['Level']
+        if self.version < _VERSION_21w43a:
+            self.data = nbt_data['Level']
+            self.tile_entities = self.data['TileEntities']
+        else:
+            self.data = nbt_data
+            self.tile_entities = self.data['block_entities']
         self.x = self.data['xPos'].value
         self.z = self.data['zPos'].value
-        self.tile_entities = self.data['TileEntities']
+
 
     def get_section(self, y: int) -> nbt.TAG_Compound:
         """
@@ -78,11 +89,16 @@ class Chunk:
         anvil.OutOfBoundsCoordinates
             If Y is not in range of 0 to 15
         """
-        if y < 0 or y > 15:
+        if (y < 0 or y > 15) and self.version < _VERSION_21w06a:
             raise OutOfBoundsCoordinates(f'Y ({y!r}) must be in range of 0 to 15')
+        if (y < -4 or y > 19) and self.version >= _VERSION_21w06a:
+            raise OutOfBoundsCoordinates(f'Y ({y!r}) must be in range of -4 to 19')
 
         try:
-            sections = self.data["Sections"]
+            if self.version < _VERSION_21w43a:
+                sections = self.data["Sections"]
+            else:
+                sections = self.data["sections"]
         except KeyError:
             return None
 
@@ -130,12 +146,13 @@ class Chunk:
 
         :rtype: :class:`anvil.Block`
         """
-        if x < 0 or x > 15:
+        if (y < 0 or y > 255) and self.version < _VERSION_21w06a:
             raise OutOfBoundsCoordinates(f'X ({x!r}) must be in range of 0 to 15')
+        if (y < -64 or y > 319) and self.version >=_VERSION_21w06a:
+            raise OutOfBoundsCoordinates(f'Y ({y!r}) must be in range of -64 to 319')
         if z < 0 or z > 15:
             raise OutOfBoundsCoordinates(f'Z ({z!r}) must be in range of 0 to 15')
-        if y < 0 or y > 255:
-            raise OutOfBoundsCoordinates(f'Y ({y!r}) must be in range of 0 to 255')
+
 
         if section is None:
             section = self.get_section(y // 16)
@@ -166,19 +183,27 @@ class Chunk:
                 return block
 
         # If its an empty section its most likely an air block
-        if section is None or 'BlockStates' not in section:
+        if (section is None or 'BlockStates' not in section) and self.version < _VERSION_21w43a:
             return Block.from_name('minecraft:air')
-
+        if (section is None or 'block_states' not in section) and self.version >= _VERSION_21w43a:
+            return Block.from_name('minecraft:air')
         # Number of bits each block is on BlockStates
         # Cannot be lower than 4
-        bits = max((len(section['Palette']) - 1).bit_length(), 4)
+        if self.version < _VERSION_21w43a:
+            bits = max((len(section['Palette']) - 1).bit_length(), 4)
+        else:
+            bits = max((len(section['block_states']["palette"]) - 1).bit_length(), 4)
+
 
         # Get index on the block list with the order YZX
         index = y * 16*16 + z * 16 + x
 
         # BlockStates is an array of 64 bit numbers
         # that holds the blocks index on the palette list
-        states = section['BlockStates'].value
+        if self.version < _VERSION_21w43a:
+            states = section['BlockStates'].value
+        else:
+            states = section['block_states']["data"].value
 
         # in 20w17a and newer blocks cannot occupy more than one element on the BlockStates array
         stretches = self.version is None or self.version < _VERSION_20w17a
@@ -224,7 +249,10 @@ class Chunk:
         # which are the palette index
         palette_id = shifted_data & 2**bits - 1
 
-        block = section['Palette'][palette_id]
+        if self.version < _VERSION_21w43a:
+            block = section['Palette'][palette_id]
+        else:
+            block = section['block_states']["palette"][palette_id]
         return Block.from_palette(block)
 
     def stream_blocks(self, index: int=0, section: Union[int, nbt.TAG_Compound]=None, force_new: bool=False) -> Generator[Block, None, None]:
