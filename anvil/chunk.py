@@ -203,7 +203,10 @@ class Chunk:
         if self.version < _VERSION_21w43a:
             states = section['BlockStates'].value
         else:
-            states = section['block_states']["data"].value
+            try:
+                states = section['block_states']["data"].value
+            except KeyError:
+                states = None
 
         # in 20w17a and newer blocks cannot occupy more than one element on the BlockStates array
         stretches = self.version is None or self.version < _VERSION_20w17a
@@ -218,7 +221,11 @@ class Chunk:
         # makes sure the number is unsigned
         # by adding 2^64
         # could also use ctypes.c_ulonglong(n).value but that'd require an extra import
-        data = states[state]
+        if states != None:
+            data = states[state]
+        else:
+            data = 0
+
         if data < 0:
             data += 2**64
 
