@@ -146,8 +146,10 @@ class Chunk:
 
         :rtype: :class:`anvil.Block`
         """
+        if x < 0 or x > 15:
+            raise OutOfBoundsCoordinates(f'X({z!r}) must be in range of 0 to 15')
         if (y < 0 or y > 255) and self.version < _VERSION_21w06a:
-            raise OutOfBoundsCoordinates(f'X ({x!r}) must be in range of 0 to 15')
+            raise OutOfBoundsCoordinates(f'Y ({x!r}) must be in range of 0 to 255')
         if (y < -64 or y > 319) and self.version >=_VERSION_21w06a:
             raise OutOfBoundsCoordinates(f'Y ({y!r}) must be in range of -64 to 319')
         if z < 0 or z > 15:
@@ -336,6 +338,8 @@ class Chunk:
             states = section['BlockStates'].value
             palette = section['Palette']
         else:
+            #For whatever reason, data and palette sometimes doesn't exist
+            #It's most likely an empty section, so air block will be returned
             try:
                 states = section["block_states"]["data"].value
                 palette = section["block_states"]["palette"]
@@ -396,15 +400,20 @@ class Chunk:
         """
         Returns a generator for all the blocks in the chunk
 
-        This is a helper function that runs Chunk.stream_blocks from section 0 to 15
+        This is a helper function that runs Chunk.stream_blocks from section 0 to 15 (1.17.x and before) or from section -4 to 19 (1.18.x and after)
 
         Yields
         ------
         :class:`anvil.Block`
         """
-        for section in range(16):
-            for block in self.stream_blocks(section=section):
-                yield block
+        if self.version < _VERSION_21w43a:
+            for section in range(16):
+                for block in self.stream_blocks(section=section):
+                    yield block
+        else:
+            for section in range(-4,20):
+                for block in self.stream_blocks(section=section):
+                    yield block
 
     def get_tile_entity(self, x: int, y: int, z: int) -> Optional[nbt.TAG_Compound]:
         """
