@@ -289,8 +289,10 @@ class Chunk:
         ------
         :class:`anvil.Block`
         """
-        if isinstance(section, int) and (section < 0 or section > 16):
+        if isinstance(section, int) and (section < 0 or section > 16) and self.version < _VERSION_21w43a:
             raise OutOfBoundsCoordinates(f'section ({section!r}) must be in range of 0 to 15')
+        elif isinstance(section, int) and (section < -4 or section > 20):
+            raise OutOfBoundsCoordinates(f'section ({section!r}) must be in range of -4 to 19')
 
         # For better understanding of this code, read get_block()'s source
 
@@ -320,14 +322,29 @@ class Chunk:
                 index += 1
             return
 
-        if section is None or 'BlockStates' not in section:
+        if (section is None or 'BlockStates' not in section) and self.version < _VERSION_21w43a:
             air = Block.from_name('minecraft:air')
             for i in range(4096):
                 yield air
             return
-
-        states = section['BlockStates'].value
-        palette = section['Palette']
+        elif section is None or 'block_states' not in section:
+            air = Block.from_name('minecraft:air')
+            for i in range(4096):
+                yield air
+            return
+        if self.version < _VERSION_21w43a:
+            states = section['BlockStates'].value
+            palette = section['Palette']
+        else:
+            try:
+                states = section["block_states"]["data"].value
+                palette = section["block_states"]["palette"]
+            except KeyError:
+                air = Block.from_name('minecraft:air')
+                for i in range(4096):
+                    yield air
+                return
+                
 
         bits = max((len(palette) - 1).bit_length(), 4)
 
