@@ -329,7 +329,7 @@ class Chunk:
             for i in range(4096):
                 yield air
             return
-        elif section is None or 'block_states' not in section:
+        elif (section is None or 'block_states' not in section) and self.version >= _VERSION_21w43a:
             air = Block.from_name('minecraft:air')
             for i in range(4096):
                 yield air
