@@ -212,7 +212,14 @@ class EmptyRegion:
             if isinstance(chunk, Chunk):
                 nbt_data = nbt.NBTFile()
                 nbt_data.tags.append(nbt.TAG_Int(name='DataVersion', value=chunk.version))
-                nbt_data.tags.append(chunk.data)
+                # quick mod to append data tags to the root instead of as a compound for 1.18.x
+                if chunk.version > 2800:
+                    count: int = 0
+                    for item in chunk.data:
+                        nbt_data.tags.append(chunk.data[count])
+                        count += 1
+                else:
+                    nbt_data.tags.append(chunk.data)
             else:
                 nbt_data = chunk.save()
             nbt_data.write_file(buffer=chunk_data)
