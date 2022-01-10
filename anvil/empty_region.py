@@ -216,7 +216,9 @@ class EmptyRegion:
                 if chunk.version > 2800:
                     count: int = 0
                     for item in chunk.data:
-                        nbt_data.tags.append(chunk.data[count])
+                        # prevent duplicate DataVersion tags
+                        if chunk.data[count].name != "DataVersion":
+                            nbt_data.tags.append(chunk.data[count])
                         count += 1
                 else:
                     nbt_data.tags.append(chunk.data)
